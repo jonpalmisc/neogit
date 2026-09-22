@@ -186,6 +186,11 @@ function M.checkout_local_branch(popup)
   end)
 
   local options = util.merge(local_branches, remote_branches)
+  local ref_name = popup.state.env.ref_name
+  if ref_name and vim.tbl_contains(options, ref_name) then
+    options = util.deduplicate(util.merge({ ref_name }, options))
+  end
+
   local target = FuzzyFinderBuffer.new(options):open_async {
     prompt_prefix = "branch",
     refocus_status = false,

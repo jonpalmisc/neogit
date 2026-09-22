@@ -1129,13 +1129,15 @@ Actions:                                           *neogit_branch_popup_actions*
     Changes HEAD to point to the selected branch/revision. If a local branch
     is selected, that will be checked out. Otherwise HEAD will become
     detached. Any ref under the cursor or selected will be available to
-    checkout.
+    checkout. In the log view, a branch decoration directly under the cursor
+    is placed first in the selector.
 
   • Checkout local branch                         *neogit_branch_checkout_local*
     Changes HEAD to point to the selected branch. Also lists branches on
     remotes that do not have a matching branch locally. If a remote branch is
     selected, then a local branch is created tracking the selected remote
-    branch.
+    branch. In the log view, a branch decoration directly under the cursor is
+    placed first when it is one of these branches.
 
   • Checkout recent branch                       *neogit_branch_checkout_recent*
     Changes HEAD to point to the selected branch. Branches are listed by how
@@ -1144,6 +1146,9 @@ Actions:                                           *neogit_branch_popup_actions*
   • Checkout new branch                             *neogit_branch_checkout_new*
     Creates and switches HEAD to a new branch. Any whitespace in the branch
     name will be automatically changed to '-'.
+
+    In the log view, a branch decoration directly under the cursor is placed
+    first in the start-point selector.
 
     For example, entering "new branch name" will result in a branch called
     "new-branch-name" being created.

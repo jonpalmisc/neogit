@@ -92,7 +92,10 @@ function M:open()
           p { commits = self.buffer.ui:get_commits_in_selection() }
         end),
         [popups.mapping_for("BranchPopup")] = popups.open("branch", function(p)
-          p { commits = self.buffer.ui:get_commits_in_selection() }
+          p {
+            commits = self.buffer.ui:get_commits_in_selection(),
+            ref_name = self.buffer.ui:get_branch_ref_under_cursor(),
+          }
         end),
         [popups.mapping_for("CommitPopup")] = popups.open("commit", function(p)
           p { commit = self.buffer.ui:get_commit_under_cursor() }
@@ -156,7 +159,10 @@ function M:open()
           p { commits = { self.buffer.ui:get_commit_under_cursor() } }
         end),
         [popups.mapping_for("BranchPopup")] = popups.open("branch", function(p)
-          p { commits = { self.buffer.ui:get_commit_under_cursor() } }
+          p {
+            commits = { self.buffer.ui:get_commit_under_cursor() },
+            ref_name = self.buffer.ui:get_branch_ref_under_cursor(),
+          }
         end),
         [popups.mapping_for("CommitPopup")] = popups.open("commit", function(p)
           p { commit = self.buffer.ui:get_commit_under_cursor() }

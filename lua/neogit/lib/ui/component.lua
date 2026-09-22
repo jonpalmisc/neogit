@@ -28,6 +28,7 @@ local default_component_options = {
 ---@field id string|nil
 ---@field oid string|nil
 ---@field ref ParsedRef
+---@field branch_ref string|nil
 ---@field yankable string?
 ---@field on_open fun(fold, Ui)
 ---@field hunk Hunk

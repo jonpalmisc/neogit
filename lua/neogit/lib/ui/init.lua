@@ -359,6 +359,21 @@ function Ui:get_ref_under_cursor()
   return component and component.options.ref
 end
 
+---@return string|nil
+function Ui:get_branch_ref_under_cursor()
+  local cursor = vim.api.nvim_win_get_cursor(0)
+
+  for _, component in ipairs(self.node_index:find_by_line(cursor[1])) do
+    if
+      component.options.branch_ref
+      and cursor[2] >= component.position.col_start
+      and cursor[2] <= component.position.col_end
+    then
+      return component.options.branch_ref
+    end
+  end
+end
+
 ---
 ---@return ParsedRef[]
 function Ui:get_refs_under_cursor()

@@ -175,7 +175,7 @@ M.CommitEntry = Component.new(function(commit, remotes, args)
         table.insert(ref_last, text(" "))
       elseif info.remotes[name] == nil then
         local branch_highlight = info.head == name and "NeogitBranchHead" or "NeogitBranch"
-        table.insert(ref, text(name, { highlight = branch_highlight }))
+        table.insert(ref, text(name, { highlight = branch_highlight, branch_ref = name }))
         table.insert(ref, text(" "))
       end
     end
@@ -183,14 +183,40 @@ M.CommitEntry = Component.new(function(commit, remotes, args)
     -- Render tracked (local+remote) branches next
     for name, remotes in pairs(info.remotes) do
       if #remotes == 1 then
-        table.insert(ref, text(remotes[1] .. "/", { highlight = "NeogitRemote" }))
+        table.insert(
+          ref,
+          text(remotes[1] .. "/", {
+            highlight = "NeogitRemote",
+            branch_ref = remotes[1] .. "/" .. name,
+          })
+        )
       end
       if #remotes > 1 then
-        table.insert(ref, text("{" .. table.concat(remotes, ",") .. "}/", { highlight = "NeogitRemote" }))
+        table.insert(ref, text("{", { highlight = "NeogitRemote" }))
+        for i, remote in ipairs(remotes) do
+          table.insert(
+            ref,
+            text(remote, {
+              highlight = "NeogitRemote",
+              branch_ref = remote .. "/" .. name,
+            })
+          )
+          if i < #remotes then
+            table.insert(ref, text(",", { highlight = "NeogitRemote" }))
+          end
+        end
+        table.insert(ref, text("}/", { highlight = "NeogitRemote" }))
       end
       local branch_highlight = info.head == name and "NeogitBranchHead" or "NeogitBranch"
       local locally = info.locals[name] ~= nil
-      table.insert(ref, text(name, { highlight = locally and branch_highlight or "NeogitRemote" }))
+      local branch_ref = locally and name or (#remotes == 1 and remotes[1] .. "/" .. name or nil)
+      table.insert(
+        ref,
+        text(name, {
+          highlight = locally and branch_highlight or "NeogitRemote",
+          branch_ref = branch_ref,
+        })
+      )
       table.insert(ref, text(" "))
     end
 
