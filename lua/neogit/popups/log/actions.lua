@@ -12,9 +12,11 @@ local a = require("neogit.lib.async")
 --- Runs `git log` and parses the commits
 ---@param popup table Contains the argument list
 ---@param flags table extra CLI flags like --branches or --remotes
+---@param uncached? boolean
 ---@return CommitLogEntry[]
-local function commits(popup, flags)
-  return git.log.list(
+local function commits(popup, flags, uncached)
+  local list = uncached and git.log.list_uncached or git.log.list
+  return list(
     util.merge(popup:get_arguments(), flags),
     popup:get_internal_arguments().graph,
     popup.state.env.files,
@@ -26,15 +28,15 @@ end
 ---@param popup table
 ---@param flags table|fun(): table
 ---@param header string|fun(flags: table): string
----@return fun(offset: number): CommitLogEntry[], string
+---@return fun(offset: number, uncached?: boolean): CommitLogEntry[], string
 local function log_query(popup, flags, header)
-  return function(offset)
+  return function(offset, uncached)
     local resolved_flags = type(flags) == "function" and flags() or flags
     local query_flags = offset > 0 and util.merge(resolved_flags, { ("--skip=%s"):format(offset) })
       or resolved_flags
     local resolved_header = type(header) == "function" and header(resolved_flags) or header
 
-    return commits(popup, query_flags), resolved_header
+    return commits(popup, query_flags, uncached), resolved_header
   end
 end
 

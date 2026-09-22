@@ -18,7 +18,7 @@ local logger = require("neogit.logger")
 ---@field files string[]
 ---@field buffer Buffer
 ---@field header string
----@field query_func fun(offset: number): CommitLogEntry[], string
+---@field query_func fun(offset: number, uncached?: boolean): CommitLogEntry[], string
 ---@field refresh_lock Semaphore
 ---@field root string
 local M = {}
@@ -27,7 +27,7 @@ M.__index = M
 ---Opens a popup for selecting a commit
 ---@param internal_args table|nil
 ---@param files string[]|nil list of files to filter by
----@param query_func fun(offset: number): CommitLogEntry[], string
+---@param query_func fun(offset: number, uncached?: boolean): CommitLogEntry[], string
 ---@return LogViewBuffer
 function M.new(internal_args, files, query_func)
   local commits, header = query_func(0)
@@ -78,8 +78,16 @@ end
 M.redraw = a.void(function(self)
   local permit = self.refresh_lock:acquire()
 
-  if not self.buffer or not self.buffer:is_valid() then
-    permit:forget()
+  local function abort_if_closed()
+    if not self.buffer or not self.buffer:is_valid() then
+      permit:forget()
+      return true
+    end
+
+    return false
+  end
+
+  if abort_if_closed() then
     return
   end
 
@@ -91,11 +99,19 @@ M.redraw = a.void(function(self)
     view = self.buffer:save_view()
   end)
   local previous_count = self:commit_count()
-  local commits, header = self.query_func(0)
+  local commits, header = self.query_func(0, true)
+  if abort_if_closed() then
+    return
+  end
+
   local refreshed_count = commit_count(commits)
 
   while refreshed_count < previous_count do
-    local additional = self.query_func(refreshed_count)
+    local additional = self.query_func(refreshed_count, true)
+    if abort_if_closed() then
+      return
+    end
+
     local additional_count = commit_count(additional)
     if additional_count == 0 then
       break
@@ -105,9 +121,14 @@ M.redraw = a.void(function(self)
     refreshed_count = refreshed_count + additional_count
   end
 
+  local remotes = git.remote.list()
+  if abort_if_closed() then
+    return
+  end
+
   self.commits = commits
   self.header = header
-  self.remotes = git.remote.list()
+  self.remotes = remotes
   self.buffer.ui:render(unpack(ui.View(self.commits, self.remotes, self.internal_args)))
   self.buffer:update_header(self.header)
 

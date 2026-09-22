@@ -305,7 +305,7 @@ end
 ---@param files? table
 ---@param color? boolean
 ---@return table
-M.graph = util.memoize(function(options, files, color)
+local function build_graph(options, files, color)
   options = ensure_max(options or {})
   files = files or {}
 
@@ -318,7 +318,9 @@ M.graph = util.memoize(function(options, files, color)
   return util.filter_map(result, function(line)
     return require("neogit.lib.ansi").parse(util.trim(line), { recolor = not color })
   end)
-end)
+end
+
+M.graph = util.memoize(build_graph)
 
 local function format(show_signature)
   local fields = {
@@ -359,8 +361,9 @@ end
 ---@param files? table
 ---@param hidden? boolean Hide from git history
 ---@param graph_color? boolean Render ascii graph in color
+---@param graph_builder? fun(options: table, files: table, color: boolean): table
 ---@return CommitLogEntry[]
-M.list = util.memoize(function(options, graph, files, hidden, graph_color)
+local function list(options, graph, files, hidden, graph_color, graph_builder)
   files = files or {}
 
   local signature = false
@@ -390,14 +393,26 @@ M.list = util.memoize(function(options, graph, files, hidden, graph_color)
       graph_output = require("neogit.lib.graph.kitty").build(commits, graph_color)
     elseif config.values.graph_style == "ascii" then
       util.remove_item_from_table(options, "--show-signature")
-      graph_output = M.graph(options, files, graph_color)
+      graph_output = (graph_builder or M.graph)(options, files, graph_color)
     end
   else
     graph_output = {}
   end
 
   return parse_log(commits, graph_output)
-end)
+end
+
+M.list = util.memoize(list)
+
+---@param options? string[]
+---@param graph? table
+---@param files? table
+---@param hidden? boolean Hide from git history
+---@param graph_color? boolean Render ascii graph in color
+---@return CommitLogEntry[]
+function M.list_uncached(options, graph, files, hidden, graph_color)
+  return list(options, graph, files, hidden, graph_color, build_graph)
+end
 
 ---Determines if commit a is an ancestor of commit b
 ---@param ancestor string commit hash
