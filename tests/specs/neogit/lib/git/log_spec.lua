@@ -1,4 +1,6 @@
 local subject = require("neogit.lib.git.log")
+local git_harness = require("tests.util.git_harness")
+local test_util = require("tests.util.util")
 
 describe("lib.git.log.parse", function()
   it("parses commit with message and diff", function()
@@ -526,5 +528,21 @@ describe("lib.git.log.parse", function()
       remotes = {},
       tags = { "0.5.7", "foo-bar" },
     }, subject.branch_info("tag: 0.5.7, tag: foo-bar", remotes))
+  end)
+end)
+
+describe("lib.git.log.list_uncached", function()
+  before_each(function()
+    git_harness.prepare_repository()
+  end)
+
+  it("bypasses a memoized log result", function()
+    local options = { "HEAD", "--max-count=1" }
+    local original = subject.list(options, false, {}, true)[1].oid
+
+    test_util.system { "git", "commit", "--allow-empty", "-m", "uncached log test" }
+
+    assert.are.equal(original, subject.list(options, false, {}, true)[1].oid)
+    assert.are_not.equal(original, subject.list_uncached(options, false, {}, true)[1].oid)
   end)
 end)
