@@ -24,99 +24,68 @@ local function commits(popup, flags)
 end
 
 ---@param popup table
----@param flags table
----@return fun(offset: number): CommitLogEntry[]
-local function fetch_more_commits(popup, flags)
+---@param flags table|fun(): table
+---@param header string|fun(flags: table): string
+---@return fun(offset: number): CommitLogEntry[], string
+local function log_query(popup, flags, header)
   return function(offset)
-    return commits(popup, util.merge(flags, { ("--skip=%s"):format(offset) }))
+    local resolved_flags = type(flags) == "function" and flags() or flags
+    local query_flags = offset > 0 and util.merge(resolved_flags, { ("--skip=%s"):format(offset) })
+      or resolved_flags
+    local resolved_header = type(header) == "function" and header(resolved_flags) or header
+
+    return commits(popup, query_flags), resolved_header
   end
 end
 
+---@param popup table
+---@param flags table|fun(): table
+---@param header string|fun(flags: table): string
+local function open_log(popup, flags, header)
+  LogViewBuffer.new(popup:get_internal_arguments(), popup.state.env.files, log_query(popup, flags, header))
+    :open()
+end
+
 function M.log_current(popup)
-  LogViewBuffer.new(
-    commits(popup, {}),
-    popup:get_internal_arguments(),
-    popup.state.env.files,
-    fetch_more_commits(popup, {}),
-    "Commits in " .. (git.branch.current() or ("(detached) " .. git.log.message("HEAD"))),
-    git.remote.list()
-  ):open()
+  open_log(popup, {}, function()
+    return "Commits in " .. (git.branch.current() or ("(detached) " .. git.log.message("HEAD")))
+  end)
 end
 
 function M.log_related(popup)
-  local flags = git.branch.related()
-  LogViewBuffer.new(
-    commits(popup, flags),
-    popup:get_internal_arguments(),
-    popup.state.env.files,
-    fetch_more_commits(popup, flags),
-    "Commits in " .. table.concat(flags, ", "),
-    git.remote.list()
-  ):open()
+  open_log(popup, git.branch.related, function(flags)
+    return "Commits in " .. table.concat(flags, ", ")
+  end)
 end
 
 function M.log_head(popup)
-  local flags = { "HEAD" }
-  LogViewBuffer.new(
-    commits(popup, flags),
-    popup:get_internal_arguments(),
-    popup.state.env.files,
-    fetch_more_commits(popup, flags),
-    "Commits in HEAD",
-    git.remote.list()
-  ):open()
+  open_log(popup, { "HEAD" }, "Commits in HEAD")
 end
 
 function M.log_local_branches(popup)
-  local flags = { git.branch.is_detached() and "" or "HEAD", "--branches" }
-  LogViewBuffer.new(
-    commits(popup, flags),
-    popup:get_internal_arguments(),
-    popup.state.env.files,
-    fetch_more_commits(popup, flags),
-    "Commits in --branches",
-    git.remote.list()
-  ):open()
+  open_log(popup, function()
+    return { git.branch.is_detached() and "" or "HEAD", "--branches" }
+  end, "Commits in --branches")
 end
 
 function M.log_other(popup)
   local options = util.merge(git.refs.list_branches(), git.refs.heads(), git.refs.list_tags())
   local branch = FuzzyFinderBuffer.new(options):open_async()
   if branch then
-    local flags = { branch }
-    LogViewBuffer.new(
-      commits(popup, flags),
-      popup:get_internal_arguments(),
-      popup.state.env.files,
-      fetch_more_commits(popup, flags),
-      "Commits in " .. branch,
-      git.remote.list()
-    ):open()
+    open_log(popup, { branch }, "Commits in " .. branch)
   end
 end
 
 function M.log_all_branches(popup)
-  local flags = { git.branch.is_detached() and "" or "HEAD", "--branches", "--remotes" }
-  LogViewBuffer.new(
-    commits(popup, flags),
-    popup:get_internal_arguments(),
-    popup.state.env.files,
-    fetch_more_commits(popup, flags),
-    "Commits in --branches --remotes",
-    git.remote.list()
-  ):open()
+  open_log(popup, function()
+    return { git.branch.is_detached() and "" or "HEAD", "--branches", "--remotes" }
+  end, "Commits in --branches --remotes")
 end
 
 function M.log_all_references(popup)
-  local flags = { git.branch.is_detached() and "" or "HEAD", "--all" }
-  LogViewBuffer.new(
-    commits(popup, flags),
-    popup:get_internal_arguments(),
-    popup.state.env.files,
-    fetch_more_commits(popup, flags),
-    "Commits in --all",
-    git.remote.list()
-  ):open()
+  open_log(popup, function()
+    return { git.branch.is_detached() and "" or "HEAD", "--all" }
+  end, "Commits in --all")
 end
 
 function M.reflog_current(popup)

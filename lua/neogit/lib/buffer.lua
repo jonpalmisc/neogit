@@ -644,6 +644,18 @@ function Buffer:resize_header()
 end
 
 ---@param text string
+function Buffer:update_header(text)
+  if not self.header_win_handle or not api.nvim_win_is_valid(self.header_win_handle) then
+    return
+  end
+
+  local buf = api.nvim_win_get_buf(self.header_win_handle)
+  if api.nvim_buf_is_valid(buf) then
+    api.nvim_buf_set_lines(buf, 0, -1, false, { (" %s"):format(text) })
+  end
+end
+
+---@param text string
 ---@param scroll boolean
 function Buffer:set_header(text, scroll)
   -- Create a blank line at the top of the buffer so our floating window doesn't

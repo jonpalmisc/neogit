@@ -8,6 +8,8 @@ local util = require("neogit.lib.util")
 local a = require("neogit.lib.async")
 local notification = require("neogit.lib.notification")
 local git = require("neogit.lib.git")
+local Watcher = require("neogit.watcher")
+local logger = require("neogit.logger")
 
 ---@class LogViewBuffer
 ---@field commits CommitLogEntry[]
@@ -16,29 +18,29 @@ local git = require("neogit.lib.git")
 ---@field files string[]
 ---@field buffer Buffer
 ---@field header string
----@field fetch_func fun(offset: number): CommitLogEntry[]
+---@field query_func fun(offset: number): CommitLogEntry[], string
 ---@field refresh_lock Semaphore
+---@field root string
 local M = {}
 M.__index = M
 
 ---Opens a popup for selecting a commit
----@param commits CommitLogEntry[]|nil
 ---@param internal_args table|nil
 ---@param files string[]|nil list of files to filter by
----@param fetch_func fun(offset: number): CommitLogEntry[]
----@param header string
----@param remotes string[]
+---@param query_func fun(offset: number): CommitLogEntry[], string
 ---@return LogViewBuffer
-function M.new(commits, internal_args, files, fetch_func, header, remotes)
+function M.new(internal_args, files, query_func)
+  local commits, header = query_func(0)
   local instance = {
     files = files,
     commits = commits,
-    remotes = remotes,
+    remotes = git.remote.list(),
     internal_args = internal_args,
-    fetch_func = fetch_func,
+    query_func = query_func,
     buffer = nil,
     refresh_lock = a.control.Semaphore.new(1),
     header = header,
+    root = git.repo.worktree_root,
   }
 
   setmetatable(instance, M)
@@ -46,12 +48,16 @@ function M.new(commits, internal_args, files, fetch_func, header, remotes)
   return instance
 end
 
-function M:commit_count()
-  return #util.filter_map(self.commits, function(commit)
+local function commit_count(commits)
+  return #util.filter_map(commits, function(commit)
     if commit.oid then
       return 1
     end
   end)
+end
+
+function M:commit_count()
+  return commit_count(self.commits)
 end
 
 function M:close()
@@ -60,12 +66,62 @@ function M:close()
     self.buffer = nil
   end
 
+  Watcher.instance(self.root):unregister(self)
   M.instance = nil
 end
 
 ---@return boolean
 function M.is_open()
   return (M.instance and M.instance.buffer and M.instance.buffer:is_visible()) == true
+end
+
+M.redraw = a.void(function(self)
+  local permit = self.refresh_lock:acquire()
+
+  if not self.buffer or not self.buffer:is_valid() then
+    permit:forget()
+    return
+  end
+
+  logger.debug("[LOG] Beginning redraw")
+
+  local active_oid, view
+  self.buffer:win_call(function()
+    active_oid = self.buffer.ui:get_commit_under_cursor()
+    view = self.buffer:save_view()
+  end)
+  local previous_count = self:commit_count()
+  local commits, header = self.query_func(0)
+  local refreshed_count = commit_count(commits)
+
+  while refreshed_count < previous_count do
+    local additional = self.query_func(refreshed_count)
+    local additional_count = commit_count(additional)
+    if additional_count == 0 then
+      break
+    end
+
+    commits = util.merge(commits, additional)
+    refreshed_count = refreshed_count + additional_count
+  end
+
+  self.commits = commits
+  self.header = header
+  self.remotes = git.remote.list()
+  self.buffer.ui:render(unpack(ui.View(self.commits, self.remotes, self.internal_args)))
+  self.buffer:update_header(self.header)
+
+  if view then
+    local item = active_oid and self.buffer.ui:find_component_by_oid(active_oid) or nil
+    self.buffer:restore_view(view, item and item.first or nil)
+  end
+
+  permit:forget()
+  logger.info("[LOG] Redraw complete")
+end)
+
+function M:id()
+  return "LogViewBuffer"
 end
 
 function M:open()
@@ -82,6 +138,9 @@ function M:open()
     filetype = "NeogitLogView",
     kind = config.values.log_view.kind,
     context_highlight = false,
+    on_detach = function()
+      Watcher.instance(self.root):unregister(self)
+    end,
     header = self.header,
     scroll_header = false,
     active_item_highlight = true,
@@ -276,7 +335,8 @@ function M:open()
         ["+"] = a.void(function()
           local permit = self.refresh_lock:acquire()
 
-          self.commits = util.merge(self.commits, self.fetch_func(self:commit_count()))
+          local commits = self.query_func(self:commit_count())
+          self.commits = util.merge(self.commits, commits)
           self.buffer.ui:render(unpack(ui.View(self.commits, self.remotes, self.internal_args)))
 
           permit:forget()
@@ -320,6 +380,7 @@ function M:open()
       return ui.View(self.commits, self.remotes, self.internal_args)
     end,
     after = function(buffer)
+      Watcher.instance(self.root):register(self)
       -- First line is empty, so move cursor to second line.
       buffer:move_cursor(2)
     end,
